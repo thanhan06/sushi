@@ -1,206 +1,5 @@
-----Món ăn bán nhiều nhất theo chi nhánh
-CREATE OR ALTER PROC sp_mon_ban_nhieu_nhat_theo_chi_nhanh
-	@top INT,
-	@chi_nhanh INT,
-	@tu_ngay DATE,
-	@den_ngay DATE
-AS
-BEGIN
-	IF NOT EXISTS (SELECT * FROM CHI_NHANH WHERE ma_cn = @chi_nhanh)
-	BEGIN
-		;THROW 50000, N'Không tìm thấy chi nhánh', 1;
-	END
-
-	IF @tu_ngay > @den_ngay
-	BEGIN
-		;THROW 50000, N'Ngày bắt đầu phải < ngày kết thúc', 1;
-	END
-
-	SELECT TOP (@top) 
-		ctpd.ma_mon as 'Ma mon', 
-		ma.ten_mon as 'Ten mon', 
-		sum(ctpd.so_luong) as 'Tong so luong',
-		sum(ctpd.so_luong * ctpd.don_gia) as 'Tong tien ban'
-	FROM CHI_TIET_PHIEU_DAT ctpd
-	JOIN PHIEU_DAT pd ON pd.ma_phieu = ctpd.ma_phieu
-	JOIN MON_AN ma ON ctpd.ma_mon = ma.ma_mon
-	JOIN HOA_DON hd ON hd.ma_phieu = pd.ma_phieu
-	WHERE pd.ma_chi_nhanh = @chi_nhanh
-	AND hd.ngay_xuat BETWEEN @tu_ngay AND @den_ngay
-	GROUP BY ctpd.ma_mon, ma.ten_mon
-	ORDER BY sum(ctpd.so_luong) DESC
-END
-GO
---Món ăn bán nhiều nhất theo khu vực
-CREATE OR ALTER PROC sp_mon_ban_nhieu_nhat_theo_khu_vuc
-	@top INT,
-	@khu_vuc NVARCHAR(50),
-	@tu_ngay DATE,
-	@den_ngay DATE
-AS
-BEGIN
-	IF (NOT EXISTS (SELECT * FROM KHU_VUC WHERE ten_kv = @khu_vuc))
-	BEGIN
-		;THROW 50000, N'Không tìm thấy khu vực', 1;
-	END
-	
-	IF @tu_ngay > @den_ngay
-	BEGIN
-		;THROW 50000, N'Ngày bắt đầu phải < ngày kết thúc', 1;
-	END
-
-	SELECT TOP (@top) 
-		ctpd.ma_mon as 'Ma mon', 
-		ma.ten_mon as 'Ten mon', 
-		sum(ctpd.so_luong) as 'Tong so luong',
-		convert(nvarchar(20), sum(ctpd.so_luong * ctpd.don_gia) / 1000) + 'k' as 'Tong tien ban'
-	FROM MON_AN ma
-	JOIN CHI_TIET_PHIEU_DAT ctpd ON ctpd.ma_mon = ma.ma_mon
-	JOIN PHIEU_DAT pd ON pd.ma_phieu = ctpd.ma_phieu
-	JOIN CHI_NHANH cn on pd.ma_chi_nhanh = cn.ma_cn
-	JOIN HOA_DON hd ON hd.ma_phieu = pd.ma_phieu
-	WHERE cn.ten_kv = @khu_vuc
-	AND hd.ngay_xuat BETWEEN @tu_ngay AND @den_ngay
-	GROUP BY ctpd.ma_mon, ma.ten_mon
-	ORDER BY sum(ctpd.so_luong) DESC
-	
-END
-GO
-
-
--- -- 0.5
--- CREATE NONCLUSTERED INDEX idx_pd_macn 
--- ON PHIEU_DAT (ma_chi_nhanh)
-
--- GO
-
--- -- 0.5
--- CREATE NONCLUSTERED INDEX idx_hd_ma_phieu 
--- ON HOA_DON (ma_phieu)
--- INCLUDE (ngay_xuat)
-
--- GO
-
-/*
-
-DROP INDEX idx_pd_macn ON PHIEU_DAT
-DROP INDEX idx_hd_ma_phieu ON HOA_DON
-
-exec sp_mon_ban_nhieu_nhat_theo_chi_nhanh 10, 1, '2020-1-1', '2025-1-1'
-exec sp_mon_ban_nhieu_nhat_theo_khu_vuc 3, 'KV70', '2020-1-1', '2025-1-1'
-
-*/
-
---Xem doanh thu món ăn theo chi nhánh
-CREATE OR ALTER PROC sp_xem_doanh_thu_mon_an_theo_chi_nhanh
-	@top INT,
-	@chi_nhanh INT,
-	@tu_ngay DATE,
-	@den_ngay DATE
-AS
-BEGIN
-	IF NOT EXISTS (SELECT * FROM CHI_NHANH WHERE ma_cn = @chi_nhanh)
-	BEGIN
-		;THROW 50000, N'Không tìm thấy chi nhánh', 1;
-	END
-	
-	IF @tu_ngay > @den_ngay
-	BEGIN
-		;THROW 50000, N'Ngày bắt đầu phải < ngày kết thúc', 1;
-	END
-
-	SELECT TOP (@top)
-		ma.ma_mon as 'Ma mon',
-		ma.ten_mon as 'Ten mon',
-		sum(ctpd.so_luong * ctpd.don_gia) as 'Tong doanh thu'
-	FROM MON_AN ma
-	LEFT JOIN CHI_TIET_PHIEU_DAT ctpd ON ctpd.ma_mon = ma.ma_mon
-	LEFT JOIN PHIEU_DAT pd ON pd.ma_phieu = ctpd.ma_phieu
-	LEFT JOIN HOA_DON hd ON hd.ma_phieu = pd.ma_phieu
-	WHERE pd.ma_chi_nhanh = @chi_nhanh
-	AND hd.ngay_xuat BETWEEN @tu_ngay AND @den_ngay
-	GROUP BY ma.ma_mon, ma.ten_mon
-	ORDER BY sum(ctpd.so_luong * ctpd.don_gia) DESC
-
-END
-GO
---Xem doanh thu món ăn theo khu vực
-CREATE OR ALTER PROC sp_xem_doanh_thu_mon_an_theo_khu_vuc
-	@top INT,
-	@khu_vuc NVARCHAR(50),
-	@tu_ngay DATE,
-	@den_ngay DATE
-AS
-BEGIN
-	IF NOT EXISTS (SELECT * FROM KHU_VUC WHERE ten_kv = @khu_vuc)
-	BEGIN
-		;THROW 50000, N'Không tìm thấy khu vực', 1;
-	END
-	
-	IF @tu_ngay > @den_ngay
-	BEGIN
-		;THROW 50000, N'Ngày bắt đầu phải < ngày kết thúc', 1;
-	END
-
-	SELECT TOP (@top)
-		ma.ma_mon as 'Ma mon',
-		ma.ten_mon as 'Ten mon',
-		sum(ctpd.so_luong * ctpd.don_gia) as 'Tong doanh thu'
-	FROM MON_AN ma
-	LEFT JOIN CHI_TIET_PHIEU_DAT ctpd ON ctpd.ma_mon = ma.ma_mon
-	LEFT JOIN PHIEU_DAT pd ON pd.ma_phieu = ctpd.ma_phieu
-	LEFT JOIN HOA_DON hd ON hd.ma_phieu = pd.ma_phieu
-	LEFT JOIN CHI_NHANH cn on cn.ma_cn = pd.ma_chi_nhanh
-	WHERE cn.ten_kv = @khu_vuc
-	AND hd.ngay_xuat BETWEEN @tu_ngay AND @den_ngay
-	GROUP BY ma.ma_mon, ma.ten_mon
-	ORDER BY sum(ctpd.so_luong * ctpd.don_gia) DESC
-
-END
-GO
-
-/*
-exec sp_xem_doanh_thu_mon_an_theo_chi_nhanh 1000, 4, '2020-1-1', '2025-1-1'
-*/
---Xem số lượt khách ahng
-CREATE OR ALTER PROC sp_xem_so_luot_khach_hang
-	@tu_ngay DATE,
-	@den_ngay DATE
-AS
-BEGIN
-
-	IF @tu_ngay > @den_ngay
-	BEGIN
-		;THROW 50000, N'Ngày bắt đầu phải < ngày kết thúc', 1;
-	END
-
-	SELECT 
-		cn.ten_kv as 'Khu vuc',
-		cn.ma_cn as 'Ma CN',
-		count(hd.ma_hd) as 'Tong so luot khach'
-	FROM CHI_NHANH cn
-	LEFT JOIN PHIEU_DAT pd ON pd.ma_chi_nhanh = cn.ma_cn
-	LEFT JOIN HOA_DON hd ON hd.ma_phieu = pd.ma_phieu
-	WHERE hd.ngay_xuat BETWEEN @tu_ngay AND @den_ngay
-	GROUP BY cn.ten_kv, cn.ma_cn
-
-END
-GO
--- CREATE NONCLUSTERED INDEX idx_hoa_don_ngay_xuat 
--- ON HOA_DON (ngay_xuat) 
--- INCLUDE (ma_phieu)
-GO
-
-/*
-CHECKPOINT; 
-GO 
-DBCC DROPCLEANBUFFERS; 
-GO
-DROP INDEX idx_hoa_don_ngay_xuat ON HOA_DON
-exec sp_xem_so_luot_khach_hang '2020-1-1', '2024-1-1'
-*/
 ------------------------------8. Quản lý đăng nhập vào trang web--------------------------------------
-CREATE PROCEDURE sp_DangNhap
+CREATE OR ALTER PROCEDURE sp_DangNhap
     @ten_tai_khoan VARCHAR(50), -- Changed from @ten_dang_nhap
     @mat_khau VARCHAR(50)
 AS
@@ -227,7 +26,7 @@ BEGIN
 END
 GO
 -------------------------------9. cập nhật thời gian truy cập--------------------------------------
-CREATE PROCEDURE sp_CapNhatThoiGianTruyCap
+CREATE OR ALTER PROCEDURE sp_CapNhatThoiGianTruyCap
     @ma_tk INT,
     @thoi_gian INT
 AS
@@ -259,108 +58,109 @@ BEGIN
 END
 GO
 ------------------------------10. Báo cáo doanh thu theo khu vực--------------------------------------
-CREATE PROCEDURE sp_BaoCaoDoanhThuKhuVuc
+CREATE OR ALTER PROCEDURE sp_BaoCaoDoanhThuKhuVuc
     @ten_kv NVARCHAR(50) = NULL,
     @ngay_bat_dau DATETIME = NULL,
     @ngay_ket_thuc DATETIME = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET ARITHABORT ON;
+    SET XACT_ABORT ON;
     
-    -- Validate region name if provided
-    IF @ten_kv IS NOT NULL AND NOT EXISTS (SELECT 1 FROM KHU_VUC WHERE ten_kv = @ten_kv)
-    BEGIN
-        RAISERROR(N'Khu vực không tồn tại!', 16, 1);
-        RETURN;
-    END
+    BEGIN TRY
+        -- Set default date range to current month if not provided
+        SET @ngay_bat_dau = ISNULL(@ngay_bat_dau, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0));
+        SET @ngay_ket_thuc = ISNULL(@ngay_ket_thuc, DATEADD(MONTH, DATEDIFF(MONTH, -1, GETDATE()), -1));
 
-    -- Set default date range
-    IF @ngay_bat_dau IS NULL 
-        SET @ngay_bat_dau = DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)
-    IF @ngay_ket_thuc IS NULL 
-        SET @ngay_ket_thuc = DATEADD(MONTH, DATEDIFF(MONTH, -1, GETDATE()), -1)
+        -- Validate date range
+        IF @ngay_bat_dau > @ngay_ket_thuc
+            THROW 50001, N'Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc!', 1;
 
-    -- Validate date range
-    IF @ngay_bat_dau > @ngay_ket_thuc
-    BEGIN
-        RAISERROR(N'Ngày bắt đầu phải nhỏ hơn ngày kết thúc!', 16, 1);
-        RETURN;
-    END
+        -- Validate region if provided
+        IF @ten_kv IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM KHU_VUC WITH (NOLOCK) WHERE ten_kv = @ten_kv
+        )
+            THROW 50002, N'Khu vực không tồn tại!', 1;
 
-    -- ...existing code...
-    SELECT 
-        kv.ten_kv AS 'Khu Vực',
-        COUNT(DISTINCT hd.ma_hd) AS 'Số Đơn',
-        ISNULL(SUM(hd.tong_tien), 0) AS 'Tổng Doanh Thu',
-        ISNULL(SUM(hd.so_tien_duoc_giam), 0) AS 'Tổng Giảm Giá',
-        ISNULL(SUM(hd.tong_tien_can_tra), 0) AS 'Doanh Thu Thực',
-        ISNULL(AVG(hd.tong_tien_can_tra), 0) AS 'Trung Bình/Đơn'
-    FROM KHU_VUC kv
-    LEFT JOIN CHI_NHANH cn ON kv.ten_kv = cn.ten_kv
-    LEFT JOIN PHIEU_DAT pd ON cn.ma_cn = pd.ma_chi_nhanh
-    LEFT JOIN HOA_DON hd ON pd.ma_phieu = hd.ma_phieu
-        AND hd.ngay_xuat BETWEEN @ngay_bat_dau AND @ngay_ket_thuc
-    WHERE (@ten_kv IS NULL OR kv.ten_kv = @ten_kv)
-    GROUP BY kv.ten_kv
-    ORDER BY SUM(ISNULL(hd.tong_tien_can_tra, 0)) DESC
-    OPTION (RECOMPILE);
-END
+        -- Main query with overflow protection
+        SELECT 
+            kv.ten_kv AS N'Khu Vực',
+            COUNT(DISTINCT hd.ma_phieu) AS N'Số Đơn',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.tong_tien AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Tổng Doanh Thu',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.so_tien_duoc_giam AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Tổng Giảm Giá',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.tong_tien_can_tra AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Doanh Thu Thực',
+            ROUND(CAST(CASE 
+                WHEN COUNT(DISTINCT hd.ma_phieu) = 0 THEN 0 
+                ELSE CAST(SUM(CAST(hd.tong_tien_can_tra AS DECIMAL(18,2))) AS DECIMAL(18,2)) / COUNT(DISTINCT hd.ma_phieu)
+            END AS DECIMAL(18,2)), 2) AS N'Trung Bình/Đơn'
+        FROM KHU_VUC kv 
+        LEFT JOIN CHI_NHANH cn  ON kv.ten_kv = cn.ten_kv
+        LEFT JOIN PHIEU_DAT pd  ON cn.ma_cn = pd.ma_chi_nhanh
+        LEFT JOIN HOA_DON hd ON pd.ma_phieu = hd.ma_phieu
+        WHERE 
+            (@ten_kv IS NULL OR kv.ten_kv = @ten_kv)
+            AND (hd.ma_phieu IS NULL OR hd.ngay_xuat BETWEEN @ngay_bat_dau AND @ngay_ket_thuc)
+        GROUP BY kv.ten_kv
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH;
+END;
 GO
 
 ------------------------------11. Báo cáo doanh thu theo chi nhánh--------------------------------------
-CREATE PROCEDURE sp_BaoCaoDoanhThuChiNhanh
+CREATE OR ALTER PROCEDURE sp_BaoCaoDoanhThuChiNhanh
     @ma_chi_nhanh INT = NULL,
     @ngay_bat_dau DATETIME = NULL,
     @ngay_ket_thuc DATETIME = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET ARITHABORT ON;
+    SET XACT_ABORT ON;
 
-    -- Validate branch ID if provided
-    IF @ma_chi_nhanh IS NOT NULL AND NOT EXISTS (
-        SELECT 1 FROM CHI_NHANH WHERE ma_cn = @ma_chi_nhanh
-    )
-    BEGIN
-        RAISERROR(N'Mã chi nhánh không tồn tại!', 16, 1)
-        RETURN
-    END
-    
-    -- Set default dates if NULL
-    IF @ngay_bat_dau IS NULL 
-        SET @ngay_bat_dau = DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)
-    IF @ngay_ket_thuc IS NULL 
-        SET @ngay_ket_thuc = DATEADD(MONTH, DATEDIFF(MONTH, -1, GETDATE()), -1)
+    BEGIN TRY
+        -- Set default dates if NULL
+        SET @ngay_bat_dau = ISNULL(@ngay_bat_dau, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0));
+        SET @ngay_ket_thuc = ISNULL(@ngay_ket_thuc, DATEADD(MONTH, DATEDIFF(MONTH, -1, GETDATE()), -1));
 
-    -- Validate date range
-    IF @ngay_bat_dau > @ngay_ket_thuc
-    BEGIN
-        RAISERROR(N'Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc!', 16, 1)
-        RETURN
-    END
+        -- Validate date range
+        IF @ngay_bat_dau > @ngay_ket_thuc
+            THROW 50001, N'Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc!', 1;
 
-    SELECT 
-        cn.ma_cn AS N'Mã Chi Nhánh',
-        cn.ten_cn AS N'Chi Nhánh',
-        kv.ten_kv AS N'Khu Vực',
-        COUNT(DISTINCT hd.ma_hd) AS N'Số Đơn',
-        ISNULL(SUM(hd.tong_tien), 0) AS N'Tổng Doanh Thu',
-        ISNULL(SUM(hd.so_tien_duoc_giam), 0) AS N'Tổng Giảm Giá',
-        ISNULL(SUM(hd.tong_tien_can_tra), 0) AS N'Doanh Thu Thực',
-        ISNULL(AVG(hd.tong_tien_can_tra), 0) AS N'Trung Bình/Đơn'
-    FROM CHI_NHANH cn
-    LEFT JOIN KHU_VUC kv ON cn.ten_kv = kv.ten_kv
-    LEFT JOIN PHIEU_DAT pd ON cn.ma_cn = pd.ma_chi_nhanh
-    LEFT JOIN HOA_DON hd ON pd.ma_phieu = hd.ma_phieu
-        AND hd.ngay_xuat BETWEEN @ngay_bat_dau AND @ngay_ket_thuc
-    WHERE (@ma_chi_nhanh IS NULL OR cn.ma_cn = @ma_chi_nhanh)
-    GROUP BY cn.ma_cn, cn.ten_cn, kv.ten_kv
-    ORDER BY kv.ten_kv, SUM(ISNULL(hd.tong_tien_can_tra, 0)) DESC
-    OPTION (RECOMPILE);
-END
+        -- Validate branch ID if provided
+        IF @ma_chi_nhanh IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM CHI_NHANH WITH (NOLOCK) WHERE ma_cn = @ma_chi_nhanh
+        )
+            THROW 50002, N'Mã chi nhánh không tồn tại!', 1;
+
+        SELECT 
+            cn.ma_cn AS N'Mã Chi Nhánh',
+            cn.ten_cn AS N'Chi Nhánh',
+            kv.ten_kv AS N'Khu Vực',
+            COUNT(DISTINCT hd.ma_phieu) AS N'Số Đơn',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.tong_tien AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Tổng Doanh Thu',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.so_tien_duoc_giam AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Tổng Giảm Giá',
+            ROUND(CAST(ISNULL(SUM(CAST(hd.tong_tien_can_tra AS DECIMAL(18,2))), 0) AS DECIMAL(18,2)), 2) AS N'Doanh Thu Thực',
+            ROUND(CAST(CASE 
+                WHEN COUNT(DISTINCT hd.ma_phieu) = 0 THEN 0 
+                ELSE CAST(SUM(CAST(hd.tong_tien_can_tra AS DECIMAL(18,2))) AS DECIMAL(18,2)) / COUNT(DISTINCT hd.ma_phieu)
+            END AS DECIMAL(18,2)), 2) AS N'Trung Bình/Đơn'
+        FROM CHI_NHANH cn  
+        LEFT JOIN KHU_VUC kv ON cn.ten_kv = kv.ten_kv
+        LEFT JOIN PHIEU_DAT pd ON cn.ma_cn = pd.ma_chi_nhanh
+        LEFT JOIN HOA_DON hd ON pd.ma_phieu = hd.ma_phieu AND hd.ngay_xuat BETWEEN @ngay_bat_dau AND @ngay_ket_thuc
+        WHERE @ma_chi_nhanh IS NULL OR cn.ma_cn = @ma_chi_nhanh
+        GROUP BY cn.ma_cn, cn.ten_cn, kv.ten_kv
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH;
+END;
 GO
-
 ------------------------------12. Xem điểm đánh giá(dịch vụ, món ăn,..)--------------------------------------
-CREATE PROCEDURE sp_XemDanhGia
+CREATE OR ALTER PROCEDURE sp_XemDanhGia
     @ma_chi_nhanh INT = NULL,
     @ngay_bat_dau DATETIME = NULL,
     @ngay_ket_thuc DATETIME = NULL
@@ -385,7 +185,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM DANH_GIA dg
-        JOIN HOA_DON hd ON dg.ma_hd = hd.ma_hd
+        JOIN HOA_DON hd ON dg.ma_phieu = hd.ma_phieu
         WHERE (@ma_chi_nhanh IS NULL OR EXISTS (
                   SELECT 1 FROM PHIEU_DAT pd 
                   WHERE pd.ma_phieu = hd.ma_phieu AND pd.ma_chi_nhanh = @ma_chi_nhanh))
@@ -399,7 +199,7 @@ BEGIN
     -- Truy vấn dữ liệu
     SELECT 
         ISNULL(cn.ten_cn, N'Không có dữ liệu') AS 'Chi Nhánh',
-        ISNULL(COUNT(dg.ma_hd), 0) AS 'Số Lượt Đánh Giá',
+        ISNULL(COUNT(dg.ma_phieu), 0) AS 'Số Lượt Đánh Giá',
         ROUND(AVG(CAST(ISNULL(dg.diem_vi_tri, 0) AS FLOAT)), 2) AS 'Điểm Vị Trí',
         ROUND(AVG(CAST(ISNULL(dg.diem_phuc_vu, 0) AS FLOAT)), 2) AS 'Điểm Phục Vụ',
         ROUND(AVG(CAST(ISNULL(dg.diem_mon_an, 0) AS FLOAT)), 2) AS 'Điểm Món Ăn',
@@ -411,12 +211,11 @@ BEGIN
                        + ISNULL(dg.diem_gia_ca, 0) 
                        + ISNULL(dg.diem_khong_gian, 0) AS FLOAT)) / 5, 2) AS 'Điểm Trung Bình'
     FROM DANH_GIA dg
-    JOIN HOA_DON hd ON dg.ma_hd = hd.ma_hd
+    JOIN HOA_DON hd ON dg.ma_phieu = hd.ma_phieu
     JOIN PHIEU_DAT pd ON hd.ma_phieu = pd.ma_phieu
     JOIN CHI_NHANH cn ON pd.ma_chi_nhanh = cn.ma_cn
     WHERE (@ma_chi_nhanh IS NULL OR cn.ma_cn = @ma_chi_nhanh)
       AND hd.ngay_xuat BETWEEN @ngay_bat_dau AND @ngay_ket_thuc
-    GROUP BY cn.ten_cn;
 
 END
 GO
@@ -587,14 +386,14 @@ BEGIN
     DECLARE @hang_the NVARCHAR(10);
     DECLARE @ma_cn INT;
     DECLARE @ma_the INT;
+
     IF NOT EXISTS(SELECT 1 FROM PHIEU_DAT WHERE ma_phieu=@ma_phieu)
     BEGIN
         RAISERROR('Phiếu đặt không tồn tại',16,1);
         RETURN;
     END
-
+    
     SELECT @ma_cn=ma_chi_nhanh FROM PHIEU_DAT WHERE ma_phieu=@ma_phieu
-
     IF NOT EXISTS (SELECT 1 
                    FROM LICH_SU_LAM_VIEC 
                    WHERE ma_nv = @nhan_vien_thanh_toan
@@ -610,43 +409,54 @@ BEGIN
     WHERE ctpd.ma_phieu = @ma_phieu;
 
     SELECT @ma_the= ma_the FROM THE WHERE sdt=@sdt;
-
-    IF @ma_the IS NOT NULL
-    BEGIN
-        --Cập nhật hạng thẻ
-        EXEC sp_cap_nhat_hang_the @ma_the = @ma_the;
-
-        SELECT @hang_the = hang_the
-        FROM THE 
-        WHERE ma_the = @ma_the;
-
-        IF @hang_the = 'membership'
+    BEGIN TRANSACTION
+    BEGIN TRY
+        IF @ma_the IS NOT NULL
         BEGIN
-            SET @tong_tien_can_tra = ROUND(@tong_tien * 0.90,0);
-            SET @so_tien_duoc_giam=@tong_tien * 0.10;
+            --Cập nhật hạng thẻ
+            EXEC sp_cap_nhat_hang_the @ma_the = @ma_the;
+
+            SELECT @hang_the = hang_the
+            FROM THE 
+            WHERE ma_the = @ma_the;
+
+            IF @hang_the = 'membership'
+            BEGIN
+                SET @tong_tien_can_tra = ROUND(@tong_tien * 0.90,0);
+                SET @so_tien_duoc_giam=@tong_tien * 0.10;
+            END
+
+            IF @hang_the = 'silver'
+            BEGIN
+                SET @tong_tien_can_tra = ROUND(@tong_tien * 0.80,0);
+                SET @so_tien_duoc_giam=@tong_tien * 0.20;
+            END
+
+            IF @hang_the = 'gold'
+            BEGIN
+                SET @tong_tien_can_tra = ROUND(@tong_tien * 0.70,0);
+                SET @so_tien_duoc_giam=@tong_tien * 0.30;
+            END
+        END  
+
+        ELSE 
+        BEGIN
+            SET @tong_tien_can_tra = ROUND(@tong_tien, 0);
+            SET @so_tien_duoc_giam = 0;
         END
 
-        IF @hang_the = 'silver'
-        BEGIN
-            SET @tong_tien_can_tra = ROUND(@tong_tien * 0.80,0);
-            SET @so_tien_duoc_giam=@tong_tien * 0.20;
-        END
+        INSERT INTO HOA_DON(ma_phieu,tong_tien,so_tien_duoc_giam,tong_tien_can_tra,ngay_xuat,nhan_vien_thanh_toan,ma_the)
+        VALUES (@ma_phieu,@tong_tien,@so_tien_duoc_giam,@tong_tien_can_tra,GETDATE(),@nhan_vien_thanh_toan,@ma_the)
 
-        IF @hang_the = 'gold'
-        BEGIN
-            SET @tong_tien_can_tra = ROUND(@tong_tien * 0.70,0);
-            SET @so_tien_duoc_giam=@tong_tien * 0.30;
-        END
-    END  
+        UPDATE PHIEU_DAT
+        SET trang_thai=N'Đã thanh toán'
+        WHERE ma_phieu=@ma_phieu
 
-    ELSE 
-    BEGIN
-        SET @tong_tien_can_tra = ROUND(@tong_tien, 0);
-        SET @so_tien_duoc_giam = 0;
-    END
-
-    INSERT INTO HOA_DON(tong_tien,so_tien_duoc_giam,tong_tien_can_tra,ngay_xuat,nhan_vien_thanh_toan,ma_phieu,ma_the)
-    VALUES (@tong_tien,@so_tien_duoc_giam,@tong_tien_can_tra,GETDATE(),@nhan_vien_thanh_toan,@ma_phieu,@ma_the)   
+        COMMIT TRANSACTION;
+    END TRY  
+    BEGIN CATCH
+        ROLLBACK;
+    END CATCH
 END
 GO
 --cập nhật thẻ khách hàng hằng tuần
@@ -719,11 +529,14 @@ GO
 --     @tu_ngay='2022-1-1',
 --     @den_ngay='2024-11-30'
 -- Tạo đơn hàng online
+
 CREATE OR ALTER PROCEDURE sp_tao_don_hang_online
+    @ma_tk INT,
     @sdt CHAR(10),
     @ma_cn INT,
     @loai_dat NVARCHAR(10),
-    @dia_chi NVARCHAR(100)
+    @dia_chi NVARCHAR(100),
+    @ngay_giao DATETIME
 AS   
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM CHI_NHANH WHERE ma_cn=@ma_cn)
@@ -731,8 +544,8 @@ BEGIN
         RAISERROR('Chi nhánh không tồn tại',16,1);
         RETURN;
     END
-    INSERT INTO DON_HANG_ONLINE(sdt,ma_cn,loai_dat,dia_chi)
-    VALUES (@sdt,@ma_cn,@loai_dat,@dia_chi);      
+    INSERT INTO DON_HANG_ONLINE(sdt,ma_cn,loai_dat,dia_chi,ngay_giao,ma_tk)
+    VALUES (@sdt,@ma_cn,@loai_dat,@dia_chi,@ngay_giao,@ma_tk);      
 END
 GO
 -- EXEC sp_tao_don_hang_online @sdt = '0388774430',
@@ -749,8 +562,6 @@ AS
 BEGIN
     DECLARE @ma_cn INT;
     SELECT @ma_cn=ma_cn FROM DON_HANG_ONLINE WHERE ma_dh=@ma_dh;
-    PRINT (@ma_cn);
-    IF @ma_cn IS NULL PRINT('0');
     IF @ma_mon NOT IN (SELECT ma_mon FROM CT_THUC_DON cttd
                        JOIN CHI_NHANH cn ON cttd.ten_kv=cn.ten_kv
                        WHERE ma_cn=@ma_cn
@@ -797,11 +608,13 @@ BEGIN
 END
 GO
 --Tạo đơn hàng online và thêm danh sách món ăn vào đơn hàng online
-CREATE OR ALTER PROCEDURE sp_tao_don_hang_online_va_them_mon
+CREATE OR ALTER PROCEDURE sp_tao_don_hang_online_va_them_mon 
+    @ma_tk INT,
     @sdt CHAR(10),
     @ma_cn INT,
     @loai_dat NVARCHAR(10),
     @dia_chi NVARCHAR(100),
+    @ngay_giao DATETIME,
     @ds_mon_an AS DS_MON_AN READONLY
 AS 
 BEGIN
@@ -814,7 +627,9 @@ BEGIN
             @sdt=@sdt,
             @ma_cn=@ma_cn,
             @loai_dat=@loai_dat,
-            @dia_chi=@dia_chi
+            @dia_chi=@dia_chi,
+            @ngay_giao=@ngay_giao,
+            @ma_tk=@ma_tk
 
         SELECT @ma_dh=MAX(ma_dh) FROM DON_HANG_ONLINE;
         --Tạo cursor
@@ -844,10 +659,11 @@ END
 GO
 ---------
 -- DECLARE @tmp DS_MON_AN;
--- INSERT INTO @tmp VALUES (1, 10), (2, 29), (3, 10);
+-- INSERT INTO @tmp VALUES (25, 2) ,(24, 2)
 -- EXEC sp_tao_don_hang_online_va_them_mon 
 --     @sdt = '0388774430',
---     @ma_cn = 1,
+--     @ma_cn = 12,
 --     @loai_dat = 'ship',
 --     @dia_chi = 'abcd',
 --     @ds_mon_an = @tmp
+

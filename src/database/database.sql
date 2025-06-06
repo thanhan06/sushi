@@ -133,7 +133,8 @@ CREATE TABLE PHIEU_DAT (
     nv_lap INT FOREIGN KEY REFERENCES NHAN_VIEN(ma_nv) NOT NULL,
     ngay_lap DATETIME NOT NULL,
     ngay_den DATETIME NOT NULL,
-    FOREIGN KEY (ma_chi_nhanh, ma_ban) REFERENCES BAN_DAT(ma_chi_nhanh, ma_ban)
+    trang_thai NVARCHAR(20) DEFAULT N'Chưa thanh toán',
+    CONSTRAINT fk_phieu_dat_ban_dat FOREIGN KEY (ma_chi_nhanh, ma_ban) REFERENCES BAN_DAT(ma_chi_nhanh, ma_ban)
 );
 GO
 
@@ -149,27 +150,27 @@ GO
 
 -- Table HOA_DON
 CREATE TABLE HOA_DON (
-    ma_hd INT IDENTITY(1, 1) PRIMARY KEY,
+    ma_phieu INT FOREIGN KEY REFERENCES PHIEU_DAT(ma_phieu),
     tong_tien FLOAT NOT NULL CHECK(tong_tien > 0),
     so_tien_duoc_giam FLOAT NOT NULL CHECK(so_tien_duoc_giam >= 0),
-    tong_tien_can_tra INT NOT NULL CHECK(tong_tien_can_tra > 0),
+    tong_tien_can_tra FLOAT NOT NULL CHECK(tong_tien_can_tra > 0),
     ngay_xuat DATETIME NOT NULL,
     nhan_vien_thanh_toan INT FOREIGN KEY REFERENCES NHAN_VIEN(ma_nv),
-    ma_phieu INT FOREIGN KEY REFERENCES PHIEU_DAT(ma_phieu),
-    ma_the INT FOREIGN KEY REFERENCES THE(ma_the)
+    ma_the INT FOREIGN KEY REFERENCES THE(ma_the),
+    PRIMARY KEY (ma_phieu)
 );
 GO
 
 -- Table DANH_GIA
 CREATE TABLE DANH_GIA (
-    ma_hd INT FOREIGN KEY REFERENCES HOA_DON(ma_hd),
+    ma_phieu INT FOREIGN KEY REFERENCES PHIEU_DAT(ma_phieu),
     diem_vi_tri INT,
     diem_phuc_vu INT,
     diem_mon_an INT,
     diem_gia_ca INT,
     diem_khong_gian INT,
     binh_luan NVARCHAR(500),
-    PRIMARY KEY (ma_hd)
+    PRIMARY KEY (ma_phieu)
 );
 GO
 
@@ -197,12 +198,14 @@ CREATE TABLE DON_HANG_ONLINE(
     ma_dh INT IDENTITY(1,1) PRIMARY KEY,
     sdt CHAR(10),
     ma_cn INT,
-    loai_dat CHAR(10),
+    loai_dat NVARCHAR(10),
     trang_thai NVARCHAR(20) DEFAULT N'Chưa xác nhận',
     dia_chi NVARCHAR(100),
-    ma_phieu INT
+    ngay_giao DATETIME,
+    ma_phieu INT,
+    ma_tk INT
 );
-
+GO
 CREATE TABLE CHI_TIET_DON_HANG_ONLINE(
     ma_dh INT,
     ma_mon INT,
@@ -210,7 +213,25 @@ CREATE TABLE CHI_TIET_DON_HANG_ONLINE(
     FOREIGN KEY(ma_dh) REFERENCES DON_HANG_ONLINE(ma_dh),
     PRIMARY KEY(ma_dh, ma_mon)
 );
+GO
 
+CREATE OR ALTER VIEW NHAN_VIEN_DANG_LV AS 
+SELECT DISTINCT nv.*, ls.ma_chi_nhanh
+FROM NHAN_VIEN nv
+JOIN LICH_SU_LAM_VIEC ls ON ls.ma_nv = nv.ma_nv
+WHERE ls.thoi_gian_ket_thuc IS NULL
+;
+GO
+
+CREATE OR ALTER VIEW CT_THUC_DON_CHI_NHANH AS
+SELECT DISTINCT cn.ma_cn, ct.ma_mon
+FROM CT_THUC_DON ct
+JOIN CHI_NHANH cn ON cn.ten_kv = ct.ten_kv
+EXCEPT 
+SELECT ma_cn, ma_mon
+FROM MON_KHONG_PV
+;
+GO
 
 /*
 

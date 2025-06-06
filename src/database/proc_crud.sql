@@ -215,8 +215,10 @@ END;
 GO
 --03.Nhân viên
 --Thêm NHAN_VIEN
-CREATE OR ALTER PROCEDURE sp_them_nhan_vien
-    @ma_tk INT,
+CREATE OR ALTER PROCEDURE usp_them_nhan_vien
+    @ten_tk VARCHAR(50),
+    @mat_khau NVARCHAR(255),
+    @ma_cn INT,
     @ho_ten NVARCHAR(50),
     @gioi_tinh NVARCHAR(5),
     @sdt CHAR(10),
@@ -225,12 +227,12 @@ CREATE OR ALTER PROCEDURE sp_them_nhan_vien
     @ma_bo_phan INT
 AS
 BEGIN
-    -- Kiểm tra giới tính
-    IF (@gioi_tinh NOT IN ('Nam', 'Nữ', 'Khác'))
-    BEGIN
-        PRINT 'Giới tính không hợp lệ!';
-        RETURN;
-    END;
+    -- -- Kiểm tra giới tính
+    -- IF (@gioi_tinh NOT IN ('Nam', 'Nữ', 'Khác'))
+    -- BEGIN
+    --     PRINT 'Giới tính không hợp lệ!';
+    --     RETURN;
+    -- END;
 
     -- Kiểm tra ngày sinh
     IF (@ngay_sinh > GETDATE())
@@ -239,12 +241,12 @@ BEGIN
         RETURN;
     END;
     
-    -- Kiểm tra mã tài khoản tồn tại
-    IF NOT EXISTS (SELECT 1 FROM TAI_KHOAN WHERE ma_tk = @ma_tk)
-    BEGIN
-        PRINT 'Mã tài khoản không tồn tại!';
-        RETURN;
-    END;
+    -- -- Kiểm tra mã tài khoản tồn tại
+    -- IF NOT EXISTS (SELECT 1 FROM TAI_KHOAN WHERE ten_tai_khoan = @ten_tk)
+    -- BEGIN
+    --     PRINT 'Mã tài khoản không tồn tại!';
+    --     RETURN;
+    -- END;
     -- Kiểm tra mã bộ phận tồn tại
     IF NOT EXISTS (SELECT 1 FROM BO_PHAN WHERE ma_bp = @ma_bo_phan)
     BEGIN
@@ -254,9 +256,18 @@ BEGIN
 
     -- Thêm nhân viên nếu tất cả điều kiện hợp lệ
     BEGIN
-        INSERT INTO NHAN_VIEN (ma_tk, ho_ten, gioi_tinh, sdt, dia_chi, ngay_sinh, ma_bo_phan)
-        VALUES (@ma_tk, @ho_ten, @gioi_tinh, @sdt, @dia_chi, @ngay_sinh, @ma_bo_phan);
-        PRINT 'Thêm nhân viên thành công!';
+        INSERT INTO TAI_KHOAN
+            (ten_tai_khoan, mat_khau, vai_tro)
+        VALUES
+            (@ten_tk, @mat_khau, 'nv');
+
+        INSERT INTO NHAN_VIEN 
+            (ma_tk, ho_ten, gioi_tinh, sdt, dia_chi, ngay_sinh, ma_bo_phan)
+        VALUES 
+            (SCOPE_IDENTITY(), @ho_ten, @gioi_tinh, @sdt, @dia_chi, @ngay_sinh, @ma_bo_phan);
+
+        INSERT INTO LICH_SU_LAM_VIEC (ma_nv, ma_chi_nhanh, thoi_gian_bat_dau)
+        VALUES (SCOPE_IDENTITY(), @ma_cn, GETDATE());
     END;
 END;
 GO
@@ -267,10 +278,8 @@ CREATE OR ALTER PROCEDURE sp_xoa_nhan_vien
 AS
 BEGIN
     BEGIN TRY
-        -- Bắt đầu giao dịch
         BEGIN TRANSACTION;
 
-        -- Kiểm tra nhân viên tồn tại
         IF NOT EXISTS (SELECT 1 FROM NHAN_VIEN WHERE ma_nv = @ma_nv)
         BEGIN
             PRINT 'Nhân viên không tồn tại!';
@@ -278,25 +287,19 @@ BEGIN
             RETURN;
         END;
 
-        -- Lấy mã tài khoản của nhân viên
         DECLARE @ma_tk INT;
         SELECT @ma_tk = ma_tk FROM NHAN_VIEN WHERE ma_nv = @ma_nv;
 
-        -- Xóa lịch sử làm việc của nhân viên
         DELETE FROM LICH_SU_LAM_VIEC WHERE ma_nv = @ma_nv;
 
-        -- Xóa nhân viên
         DELETE FROM NHAN_VIEN WHERE ma_nv = @ma_nv;
 
-        -- Xóa tài khoản (nếu cần)
         DELETE FROM TAI_KHOAN WHERE ma_tk = @ma_tk;
 
-        -- Commit giao dịch
         COMMIT TRANSACTION;
         PRINT 'Xóa nhân viên và tài khoản thành công!';
     END TRY
     BEGIN CATCH
-        -- Rollback giao dịch nếu có lỗi
         ROLLBACK TRANSACTION;
         PRINT 'Lỗi xảy ra khi xóa nhân viên!';
         THROW;
@@ -495,7 +498,7 @@ CREATE OR ALTER PROC sp_them_mon_an
     @gia INT,
     @loai INT,
     @gia_hien_tai INT,
-    @giao_hang INT
+    @giao_hang CHAR(1)
 AS
 BEGIN
     IF NOT EXISTS(SELECT * FROM LOAI_MON_AN WHERE ma_loai=@loai)
@@ -630,7 +633,7 @@ END;
 GO
 --09.LICH_SU_LAM_VIEC
 -- Thêm LICH_SU_LAM_VIEC
-CREATE OR ALTER PROCEDURE sp_them_lich_su_lam_viec
+CREATE OR ALTER PROCEDURE usp_them_lich_su_lam_viec
     @ma_nv INT,
     @ma_chi_nhanh INT,
     @thoi_gian_bat_dau DATETIME,
@@ -640,15 +643,14 @@ BEGIN
     -- Kiểm tra nhân viên và chi nhánh tồn tại
     IF NOT EXISTS (SELECT 1 FROM NHAN_VIEN WHERE ma_nv = @ma_nv)
     BEGIN
-        PRINT 'Nhân viên không tồn tại!';
+        ;THROW 50001, N'Nhân viên không tồn tại!', 1;
         RETURN;
     END;
 
     IF NOT EXISTS (SELECT 1 FROM CHI_NHANH WHERE ma_cn = @ma_chi_nhanh)
     BEGIN
-        PRINT 'Chi nhánh không tồn tại!';
-        RETURN;
-    END;
+		;THROW 50001, N'Chi nhánh không tồn tại', 1;
+   END;
 
     -- Kiểm tra ngày sinh phải nhỏ hơn ngày vào làm
     IF EXISTS (
@@ -660,13 +662,7 @@ BEGIN
     -- Kiểm tra thời gian kết thúc lớn hơn thời gian bắt đầu
     IF (@thoi_gian_ket_thuc <= @thoi_gian_bat_dau)
     BEGIN
-        PRINT 'Thời gian kết thúc phải lớn hơn thời gian bắt đầu!';
-        RETURN;
-    END;
-
-    BEGIN
-        PRINT 'Lỗi: Ngày sinh của nhân viên phải nhỏ hơn ngày vào làm.';
-        RETURN;
+        ;THROW 50002, N'Thời gian kết thúc phải lớn hơn thời gian bắt đầu!', 1;
     END;
 
     -- Kiểm tra xem nhân viên có làm việc tại chi nhánh khác trong cùng thời gian không
@@ -674,20 +670,24 @@ BEGIN
         SELECT 1
         FROM LICH_SU_LAM_VIEC
         WHERE ma_nv = @ma_nv
-          AND ma_chi_nhanh <> @ma_chi_nhanh
-          AND thoi_gian_bat_dau < ISNULL(@thoi_gian_ket_thuc, GETDATE())
-          AND ISNULL(thoi_gian_ket_thuc, GETDATE()) > @thoi_gian_bat_dau
+        AND ma_chi_nhanh <> @ma_chi_nhanh
+        AND (NOT (
+			thoi_gian_bat_dau > ISNULL(@thoi_gian_ket_thuc, GETDATE())
+			OR ISNULL(thoi_gian_ket_thuc, GETDATE()) < @thoi_gian_bat_dau
+		))
     )
     BEGIN
-        PRINT 'Nhân viên không thể làm việc tại hai chi nhánh trong cùng một thời gian!';
-        RETURN;
+        ;THROW 50004, 'Nhân viên không thể làm việc tại hai chi nhánh trong cùng một thời gian!', 1;
     END;
 
+	UPDATE LICH_SU_LAM_VIEC
+	SET thoi_gian_ket_thuc = GETDATE()
+	WHERE ma_nv = @ma_nv
+	AND thoi_gian_ket_thuc IS NULL 
+	
     -- Thêm bản ghi lịch sử làm việc
     INSERT INTO LICH_SU_LAM_VIEC (ma_nv, ma_chi_nhanh, thoi_gian_bat_dau, thoi_gian_ket_thuc)
     VALUES (@ma_nv, @ma_chi_nhanh, @thoi_gian_bat_dau, @thoi_gian_ket_thuc);
-
-    PRINT 'Thêm lịch sử làm việc thành công!';
 END;
 GO
 -- -- Xóa LICH_SU_LAM_VIEC
@@ -894,7 +894,7 @@ BEGIN
 END;
 GO
 --Xóa PHIEU_DAT
-CREATE OR ALTER PROC sp_xoa_chi_tiet_phieu_dat
+CREATE OR ALTER PROC sp_xoa_phieu_dat
     @ma_phieu INT
 AS
 BEGIN
@@ -906,6 +906,8 @@ BEGIN
     BEGIN TRANSACTION;
     BEGIN TRY
         DELETE FROM CHI_TIET_PHIEU_DAT WHERE ma_phieu=@ma_phieu;
+        DELETE FROM HOA_DON WHERE ma_phieu=@ma_phieu;
+        DELETE FROM DANH_GIA WHERE ma_phieu=@ma_phieu;
         DELETE FROM PHIEU_DAT WHERE ma_phieu=@ma_phieu;
         COMMIT TRANSACTION;
     END TRY
@@ -942,7 +944,7 @@ BEGIN
         RETURN;
     END
 
-    DECLARE @don_gia INT;
+    DECLARE @don_gia INT;   
     SELECT @don_gia=gia_hien_tai
     FROM MON_AN
     WHERE ma_mon=@ma_mon
@@ -984,7 +986,7 @@ BEGIN
     END
 
     DECLARE @count INT;
-    SELECT @count=count(*) FROM CHI_TIET_PHIEU_DAT WHERE ma_phieu=@ma_phieu AND ma_mon=@ma_mon;
+    SELECT @count=count(*) FROM CHI_TIET_PHIEU_DAT WHERE ma_phieu=@ma_phieu;
     IF(@count=1)
     BEGIN
         RAISERROR('Mỗi phiếu đặt phải có ít nhất 1 món ăn', 16, 1);
@@ -996,21 +998,21 @@ GO
 --14.HOA_DON
 --Xóa HOA_DON
 CREATE OR ALTER PROC sp_xoa_hoa_don
-    @ma_hd INT
+    @ma_phieu INT
 AS   
 BEGIN
-    IF NOT EXISTS(SELECT* FROM HOA_DON WHERE ma_hd=@ma_hd)
+    IF NOT EXISTS(SELECT* FROM HOA_DON WHERE ma_phieu=@ma_phieu)
     BEGIN
         RAISERROR('Hóa đơn không tồn tại',16,1);
         RETURN;
     END
-    DELETE FROM HOA_DON WHERE ma_hd=@ma_hd;
+    DELETE FROM HOA_DON WHERE ma_phieu=@ma_phieu;
 END
 GO
 --15.DANH_GIA
 -- proc them danh gia
 create or alter procedure sp_them_danh_gia
-    @ma_hd int,
+    @ma_phieu int,
     @diem_vi_tri int,
     @diem_phuc_vu int,
     @diem_mon_an int,
@@ -1019,12 +1021,12 @@ create or alter procedure sp_them_danh_gia
     @binh_luan nvarchar(500)
 as
 begin
-    if not exists (select 1 from hoa_don where ma_hd = @ma_hd)
+    if not exists (select 1 from hoa_don where ma_phieu= @ma_phieu)
     begin
         raiserror('hóa đơn không tồn tại', 16, 1);
         return;
     end
-    if exists (select 1 from danh_gia where ma_hd = @ma_hd)
+    if exists (select 1 from danh_gia where ma_phieu = @ma_phieu)
     begin
         raiserror('hóa đơn đã được đánh giá', 16, 1);
         return;
@@ -1039,8 +1041,8 @@ begin
         return;
     end
 
-    insert into danh_gia (ma_hd,diem_vi_tri,diem_phuc_vu,diem_mon_an,diem_gia_ca,diem_khong_gian,binh_luan)
-    values (@ma_hd,@diem_vi_tri,@diem_phuc_vu,@diem_mon_an,@diem_gia_ca,@diem_khong_gian,@binh_luan);
+    insert into danh_gia (ma_phieu,diem_vi_tri,diem_phuc_vu,diem_mon_an,diem_gia_ca,diem_khong_gian,binh_luan)
+    values (@ma_phieu,@diem_vi_tri,@diem_phuc_vu,@diem_mon_an,@diem_gia_ca,@diem_khong_gian,@binh_luan);
 	end;
 go
 --16.TT_KHACH_HANG
